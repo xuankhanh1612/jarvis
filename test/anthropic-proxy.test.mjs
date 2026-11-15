@@ -1,13 +1,18 @@
 /**
- * Tests for the server-side Claude proxy in api/anthropic/[...path].ts.
+ * Tests for the server-side Claude proxy in api/anthropic/[...path].mts.
  *
  * These drive the handler directly with a synthetic `Request`, so they need no
  * deployment and no network: the interesting behaviour is which requests get
  * through, which headers survive in both directions, and what the browser sees
- * when the deployment is misconfigured. Node 22 strips the TypeScript types on
- * import, which is why this is a `.mjs` test of a `.ts` module and not a build
- * step — there is no compile step between the file that runs on Vercel and the
- * file under test.
+ * when the deployment is misconfigured.
+ *
+ * The file is `.mts` rather than `.ts` for a reason worth keeping. Both CI and
+ * the Vercel deploy run Node 20, and Node only learned to strip TypeScript
+ * types from modules in 22 — a `.ts` module here imported cleanly on a dev
+ * machine and failed on CI with ERR_INVALID_TYPESCRIPT_SYNTAX. An `.mts`
+ * extension marks it unambiguously as an ES module, so `tsx` (already a dev
+ * dependency) can load it on any supported Node, and Vercel's own compiler does
+ * not care either way.
  *
  * No test here uses a real key, and none contacts Anthropic: `fetch` is stubbed
  * where a request would go out.
@@ -16,7 +21,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { default: handler } = await import('../api/anthropic/[...path].ts')
+const { default: handler } = await import('../api/anthropic/[...path].mts')
 
 /** What the stub `fetch` was handed, so assertions can look at the relay. */
 let seen = null

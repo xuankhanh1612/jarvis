@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "functions": {
-    "api/anthropic/[...path].ts": {
+    "api/anthropic/[...path].mts": {
       "memory": 1024,
       "maxDuration": 120
     }
