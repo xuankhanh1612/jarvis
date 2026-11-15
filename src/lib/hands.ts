@@ -37,7 +37,24 @@ import { holdCamera, releaseCamera } from './camera'
  * executable code, re-resolved every load, that we neither control nor can pin
  * against being changed underneath us.
  */
-const WASM_BASE = '/mediapipe'
+/**
+ * Served from our own origin, copied out of node_modules by
+ * scripts/vendor-wasm.mjs.
+ *
+ * Not a CDN, for two reasons that both bite. The runtime arrives as a script
+ * and the page's CSP names no CDN in `script-src` — so a CDN path is simply
+ * blocked, and the symptom is gesture control that never starts with nothing
+ * obviously wrong. And a CDN import is a live supply-chain dependency:
+ * executable code, re-resolved every load, that we neither control nor can pin
+ * against being changed underneath us.
+ *
+ * Built on BASE_URL rather than a bare `/mediapipe`, because this app is served
+ * from a subpath when it is on GitHub Pages (`/jarvis/`). Hardcoding the slash
+ * asks the Pages host for a file at the domain root, which is a 404, and 404s
+ * here are silent: the wasm loader falls back, hand tracking never starts, and
+ * nothing on screen says why.
+ */
+const WASM_BASE = `${import.meta.env.BASE_URL}mediapipe`
 
 /**
  * The weights stay remote, and that is a different call from the runtime above.

@@ -224,6 +224,10 @@ then the triangular arc reactor lighting up — with a start-up sound under it
 Everything is optional in bridge mode. Frontend settings live in `.env.local`
 (copy `.env.example`); bridge settings are environment variables.
 
+> Building for GitHub Pages? It needs two settings the local flow does not:
+> `VITE_BASE=/<repo>/` and a decision about the key. See
+> [Deploying to GitHub Pages](#deploying-to-github-pages).
+
 ### Bridge
 
 | Variable | Default | Effect |
@@ -332,6 +336,84 @@ bridge reaches it through a short PowerShell relay (WSL interop must be on,
 which it is by default). Open the app at `http://127.0.0.1:5173` if
 `localhost` is slow to load — Windows tries IPv6 loopback first, and WSL does
 not forward it.
+
+---
+
+## Deploying to GitHub Pages
+
+The repository ships two workflows in `.github/workflows/`:
+
+- `deploy.yml` — on every push to `main`, builds the app and publishes `dist/`
+  to Pages at `https://<owner>.github.io/<repo>/`.
+- `ci.yml` — lint, tests and a build on every pull request, and on `main`.
+
+### One-time setup
+
+1. **Settings → Pages → Source: GitHub Actions.** Nothing deploys until this is
+   set; the deploy step fails with a 404 from the Pages API otherwise.
+2. **Settings → Secrets and variables → Actions.** Add what you want the
+   deployed page to have. Everything is optional except the key for `direct`
+   mode.
+
+| Kind | Name | Effect |
+|---|---|---|
+| Variable | `VITE_BACKEND` | `direct` (default in CI) or `bridge` |
+| Secret | `VITE_ANTHROPIC_API_KEY` | Required for `direct` mode |
+| Variable | `VITE_BRIDGE_URL` | Where the bridge is, in `bridge` mode |
+| Variable | `VITE_TTS_ENGINE` / `VITE_KOKORO_VOICE` | Neural voice in the browser |
+| Secret | `VITE_ELEVENLABS_API_KEY` | Better voice, costs a round trip per sentence |
+| Secret | `VITE_PICOVOICE_ACCESS_KEY` | Offline wake word instead of the browser's |
+
+A blank value is treated as unset, so an empty variable behaves exactly like a
+missing one — src/config.ts is written for that.
+
+### Read this before you use `direct` mode publicly
+
+In `direct` mode the browser calls the Claude API itself, which is what makes a
+static deploy able to answer at all. The price is that
+`VITE_ANTHROPIC_API_KEY` is compiled into the public JavaScript: anyone who
+opens devtools on the deployed site can read it and spend against it. Vite
+inlines `VITE_*` at build time; there is no runtime secret in a static site.
+
+If that matters, use a key made for the deploy alone, with a spend limit, and
+keep the rest of your life on a different key. The MCP tokens in
+`src/config.ts` are the same story and are worse — some of those URLs *are* the
+credential. Leave them empty on a public deploy.
+
+`bridge` mode has the opposite shape: no key in the bundle, but the page is only
+an interface until a bridge is running. A visitor without your bridge sees the
+reactor, the HUD and the boot sequence, and gets no answers. Note also that the
+bridge serves `ws://localhost:8787` and only trusts local dev origins, so a
+Pages page cannot reach a bridge on your machine as-is — `bridge` mode is for
+local use, not for a public demo.
+
+### What the workflow handles for you
+
+- **The subpath.** A Pages project site is served from `/<repo>/`, so the build
+  is given `VITE_BASE=/<repo>/`, taken from the repository name. Every asset URL,
+  audio file and the hand-tracking WASM are resolved against it — hardcoded
+  leading slashes were the thing that would otherwise have produced a blank page
+  with a console full of 404s.
+- **The hand-tracking runtime.** `npm run build` has a `prebuild` step that
+  copies MediaPipe's WASM out of `node_modules` into the artifact. It is not in
+  git (34 MB, and `.gitignore`d), so anything that builds without `npm ci`
+  first will deploy a version where gesture control silently never starts.
+- **`.nojekyll`** so Pages serves the `_`-prefixed and dotted files untouched,
+  and `404.html` so a future route does not hard-404.
+- **The CUDA download.** `onnxruntime-node`'s postinstall pulls several hundred
+  megabytes of CUDA binaries on Linux/x64. The workflow sets
+  `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`; the browser uses the wasm build from
+  `onnxruntime-web` and never loads the CUDA one.
+
+### Checking a Pages build locally
+
+```bash
+VITE_BASE=/jarvis/ npm run build
+npx vite preview          # serves dist/ — paths resolve as they will on Pages
+```
+
+Try hand control specifically. It is the one feature whose assets live outside
+`assets/`, and a mistake there is silent.
 
 ---
 

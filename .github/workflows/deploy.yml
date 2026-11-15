@@ -1,0 +1,131 @@
+name: Deploy to GitHub Pages
+
+# Publishes the built interface to
+#   https://<owner>.github.io/<repo>/
+# on every push to main. Nothing else to run: the site is static.
+#
+# One-time setup, in the repository's Settings → Pages: set "Source" to
+# "GitHub Actions". Without that the deploy step fails with a 404 on the Pages
+# API, because there is no site for Actions to publish to.
+#
+# What actually works on the deployed page depends on the build settings below.
+# Read the section in README.md titled "Deploying to GitHub Pages" first — in
+# `direct` mode the Anthropic key is compiled into the public JavaScript, and in
+# `bridge` mode the page is only an interface until you run the bridge locally.
+
+on:
+  push:
+    branches: [main]
+  # Lets you redeploy from the Actions tab without pushing a commit.
+  workflow_dispatch:
+
+# The deploy needs to mint an OIDC token and hand the artifact to Pages; read is
+# all the source checkout ever needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deployment at a time. Not cancelled mid-flight: a run that is
+# already uploading is allowed to finish rather than leaving the site on a
+# half-published state.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Fail here, early and in plain words, rather than three steps later with
+      # a bare 404 from the Pages API. Pages is not created automatically: a
+      # repository that has never been published answers 404, and the message
+      # `deploy-pages` gives for that is not one you can act on.
+      - name: Check Pages is enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=$(curl -sS -o /tmp/pages.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/pages")
+          if [ "$status" = "200" ]; then
+            echo "Pages is configured; publishing."
+            exit 0
+          fi
+          echo "::error::GitHub Pages is not enabled for ${{ github.repository }}. Open Settings → Pages → Build and deployment → Source, choose 'GitHub Actions', then re-run this workflow. Nothing else needs changing."
+          exit 1
+
+      - name: Install dependencies
+        env:
+          # onnxruntime-node's postinstall fetches the CUDA build on Linux/x64 —
+          # a few hundred megabytes, on every run, for a runtime the browser
+          # bundle never touches. The wasm build used by the neural voice comes
+          # from onnxruntime-web and is installed normally.
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+        run: npm ci
+
+      - name: Build
+        env:
+          # A Pages project site is served from /<repo>/, and every emitted asset
+          # URL has to know that. Taken from the repository name rather than
+          # hardcoded, so a renamed repo or a fork still deploys without an edit.
+          VITE_BASE: /${{ github.event.repository.name }}/
+          # The one setting that decides whether the deployed page can answer.
+          #   direct — the browser calls the Claude API itself. Needs the key
+          #            below, and ships it to everyone who opens devtools.
+          #   bridge — the page talks to a bridge you run on your own machine.
+          #            No key in the bundle; visitors without that bridge see the
+          #            interface and get no answers.
+          # Defaults to direct so a fresh fork does something after one secret is
+          # added. Set a repository Variable called VITE_BACKEND to override.
+          VITE_BACKEND: ${{ vars.VITE_BACKEND || 'direct' }}
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+          # Everything else is optional and only takes effect when set. Blank is
+          # treated as unset by src/config.ts, so leaving them alone is safe.
+          VITE_BRIDGE_URL: ${{ vars.VITE_BRIDGE_URL }}
+          VITE_TTS_ENGINE: ${{ vars.VITE_TTS_ENGINE }}
+          VITE_KOKORO_VOICE: ${{ vars.VITE_KOKORO_VOICE }}
+          VITE_USE_ELEVENLABS: ${{ vars.VITE_USE_ELEVENLABS }}
+          VITE_ELEVENLABS_API_KEY: ${{ secrets.VITE_ELEVENLABS_API_KEY }}
+          VITE_PICOVOICE_ACCESS_KEY: ${{ secrets.VITE_PICOVOICE_ACCESS_KEY }}
+        # `npm run build` also copies MediaPipe's WASM runtime into public/ —
+        # that is a prebuild step in package.json, not something Vite does.
+        run: npm run build
+
+      - name: Finish the artifact
+        run: |
+          # Jekyll would otherwise process the upload; it is not needed and it
+          # drops files whose names it does not like.
+          touch dist/.nojekyll
+          # Harmless today (the app has a single route) and correct the day a
+          # router is added: Pages serves 404.html for unknown paths.
+          cp dist/index.html dist/404.html
+          # A deploy that silently shipped an empty dist is worth failing over.
+          test -f dist/index.html
+          test -d dist/mediapipe || echo "::warning::no mediapipe runtime in the build — gesture control will not start on the deployed site"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

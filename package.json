@@ -11,13 +11,15 @@
   "scripts": {
     "start": "node scripts/start.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/vendor-wasm.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node --test",
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",
     "bridge:writes": "node bridge/server.mjs --writes",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "vendor:wasm": "node scripts/vendor-wasm.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.220",
