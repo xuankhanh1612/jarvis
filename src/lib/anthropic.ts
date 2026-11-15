@@ -1,16 +1,39 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { env, MODEL, FAST_MODE, SYSTEM_PROMPT, activeServers } from '../config'
+import {
+  API_BASE_URL,
+  env,
+  MODEL,
+  FAST_MODE,
+  SYSTEM_PROMPT,
+  activeServers,
+} from '../config'
 
 /**
- * The Claude API supports CORS, so the browser can talk to it directly — no
- * server of our own. `dangerouslyAllowBrowser` is the SDK's acknowledgement
- * that this exposes the key to anyone who opens devtools, which is acceptable
- * for a local demo and not for a public deploy.
+ * Two ways to reach the API, one client.
+ *
+ * In `proxy` mode `baseURL` is `/api/anthropic`, a same-origin function defined
+ * in api/anthropic/[...path].ts. The SDK appends its normal paths (`/v1/messages`
+ * and so on) and posts them there instead of to Anthropic; the function adds the
+ * key server-side and streams the answer back. Nothing else in this file had to
+ * change, because MCP servers, hosted tools and `pause_turn` continuations were
+ * always resolved on Anthropic's side — the browser only ever sends one request
+ * and reads an event stream.
+ *
+ * `apiKey` in proxy mode is a placeholder rather than a credential. The SDK
+ * refuses to construct without one and would otherwise throw at import time, and
+ * a sentinel makes the difference legible when someone reads a log: `proxy` can
+ * never be a real key. The proxy overwrites the header regardless.
+ *
+ * In `direct` mode this is the shape the file used to have: the browser calls
+ * Anthropic itself with a key from the bundle. `dangerouslyAllowBrowser` is the
+ * SDK's acknowledgement that this exposes the key to anyone who opens devtools.
  */
 const client = new Anthropic({
-  apiKey: env.anthropicKey,
+  apiKey: env.anthropicKey || 'proxy',
+  baseURL: API_BASE_URL,
   dangerouslyAllowBrowser: true,
 })
+
 
 export type Msg = Anthropic.Beta.BetaMessageParam
 

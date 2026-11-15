@@ -89,6 +89,13 @@ jobs:
           # Defaults to direct so a fresh fork does something after one secret is
           # added. Set a repository Variable called VITE_BACKEND to override.
           VITE_BACKEND: ${{ vars.VITE_BACKEND || 'direct' }}
+          # GitHub Pages serves files and nothing else, so the server-side proxy
+          # cannot exist here: /api/anthropic would 404. Pinned to `direct`
+          # rather than left to default, because the default is `proxy` and a
+          # Pages build that quietly pointed at a route it cannot serve would
+          # fail every turn with a confusing network error. Vercel is the deploy
+          # that gets the proxy; see vercel.json and api/anthropic/.
+          VITE_API_ROUTE: direct
           VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
           # Everything else is optional and only takes effect when set. Blank is
           # treated as unset by src/config.ts, so leaving them alone is safe.
@@ -113,6 +120,13 @@ jobs:
           # A deploy that silently shipped an empty dist is worth failing over.
           test -f dist/index.html
           test -d dist/mediapipe || echo "::warning::no mediapipe runtime in the build — gesture control will not start on the deployed site"
+          # Pages has no serverless functions, so the proxy route must not be
+          # baked into a Pages build. Catching it here beats discovering it as a
+          # dead assistant on a public URL.
+          if grep -rq 'api/anthropic' dist/assets/*.js; then
+            echo "::error::this Pages build references /api/anthropic, which Pages cannot serve. VITE_API_ROUTE must be 'direct' here."
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -417,6 +417,82 @@ Try hand control specifically. It is the one feature whose assets live outside
 
 ---
 
+## Deploying to Vercel
+
+Vercel is the deploy that can answer, because it can hold a secret. GitHub Pages
+serves files and nothing else; Vercel runs a function.
+
+### What is different here
+
+The app talks to Claude through `api/anthropic/[...path].ts`, a same-origin
+serverless proxy. The browser posts to `/api/anthropic/v1/messages`; the function
+adds the key from its environment and forwards the streaming response back.
+
+That is the whole point: **the key never enters the JavaScript bundle.** Vite
+inlines every `VITE_*` variable at build time, so a deploy using
+`VITE_ANTHROPIC_API_KEY` hands the key to anyone who opens devtools. Here there
+is no such variable — the bundle contains the string `/api/anthropic` and
+nothing else worth stealing.
+
+The mode is chosen by `VITE_API_ROUTE`:
+
+| `VITE_API_ROUTE` | Key lives in | Safe to make public |
+|---|---|---|
+| `proxy` (default) | `ANTHROPIC_API_KEY`, server-side | yes |
+| `direct` | `VITE_ANTHROPIC_API_KEY`, in the bundle | no |
+
+With neither set, the default is `proxy` — the mode that works when someone
+deploys this without reading the code first.
+
+### Setup
+
+1. Import `xuankhanh1612/jarvis` in Vercel. It detects Vite, `vercel.json` sets
+   the build command and output directory, and nothing needs changing.
+2. **Settings → Environment Variables** — add the key for **Production and
+   Preview**:
+
+   | Key | Value | Notes |
+   |---|---|---|
+   | `ANTHROPIC_API_KEY` | `sk-ant-…` | The only required one. Server-side only. |
+   | `VITE_API_ROUTE` | `proxy` | Set for clarity; it is the default. |
+   | `VITE_TTS_ENGINE` | `system` | Or `kokoro` for the neural voice. |
+   | `VITE_ELEVENLABS_API_KEY` | `…` | Optional, better voice. |
+   | `VITE_PICOVOICE_ACCESS_KEY` | `…` | Optional, offline wake word. |
+
+3. Redeploy. Environment variables only apply to builds made after they are
+   added, so an existing deployment will keep answering 500 until then.
+
+### The proxy is deliberately narrow
+
+It is not an open relay, and the differences matter if you are deciding whether
+to trust it with a key:
+
+- **Path allowlist.** Only `/v1/messages`, `/v1/messages/count_tokens`,
+  `/v1/messages/batches` and `/v1/models` are forwarded. There is no way to use
+  it to reach another part of the API.
+- **Methods.** `GET`, `POST` and `DELETE` only.
+- **Size.** Bodies over 1 MB are refused.
+- **No CORS headers.** Same-origin by construction. Granting
+  `Access-Control-Allow-Origin` would make it an open relay for anyone's bill,
+  which is the problem it was built to fix.
+- **Inbound credentials are dropped.** A caller-supplied `x-api-key` or
+  `authorization` is discarded and the server's key is set last, so nothing
+  inbound can override it.
+- **No key in any response.** Upstream errors are relayed as their own bodies,
+  which describe the problem without the credential.
+
+Responses are streamed, not buffered — the app starts speaking on the first
+sentence rather than the last.
+
+### GitHub Pages, for contrast
+
+`deploy.yml` pins `VITE_API_ROUTE=direct`, because Pages cannot serve
+`/api/anthropic`. It also fails the build if a Pages artifact ever references
+that path. If you deploy there, the key *is* in the bundle; use a key made for
+it alone, with a spend limit.
+
+---
+
 ## Tests
 
 `npm test` runs the bridge's tests with Node's built-in runner. They cover the

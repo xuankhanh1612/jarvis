@@ -13,7 +13,7 @@ import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
 import * as kokoro from './lib/kokoro'
-import { TTS_ENGINE } from './config'
+import { API_ROUTE, TTS_ENGINE } from './config'
 import { forTool, attention } from './lib/fillers'
 import {
   ask,
@@ -60,6 +60,40 @@ const FOLLOW_UP_MS = 11000
 const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `id${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+
+/**
+ * Turn a failed turn into one sentence someone can act on.
+ *
+ * The errors a deployed JARVIS actually produces are nearly all configuration,
+ * and their raw form is a status code and a path — "500
+ * /api/anthropic/v1/messages", "Failed to fetch". That reads like a bug in the
+ * app and says nothing about the fix, which is always in a dashboard the person
+ * reading it has probably never opened. So the three cases worth naming get a
+ * sentence that names the variable instead.
+ *
+ * The proxy's own error bodies already carry an actionable message (see
+ * api/anthropic/[...path].ts); `APIError` exposes it as `error.error.message`,
+ * and passing that through is better than anything generic written here.
+ */
+function spokenFailure(err: unknown): string {
+  if (API_ROUTE === 'proxy') {
+    const detail = (err as { error?: { error?: { message?: string } } })?.error?.error?.message
+    if (typeof detail === 'string' && detail) return detail
+
+    // `fetch` rejects rather than resolving when DNS, TLS or the connection
+    // itself fails — including when the function is not deployed at all.
+    if (err instanceof TypeError) {
+      return 'The server could not be reached. If this is a fresh deploy, check that ANTHROPIC_API_KEY is set and redeploy.'
+    }
+
+    const status = (err as { status?: number })?.status
+    if (status === 401 || status === 403) {
+      return 'The API refused the key. Check ANTHROPIC_API_KEY in the deployment settings.'
+    }
+    if (status === 429) return 'The API is rate limiting us. Give it a moment.'
+  }
+  return err instanceof Error ? err.message : 'Something went wrong.'
+}
 
 /** The same mishearings voice.ts accepts for the wake word — otherwise a turn
  *  that woke him as "travis" gets that word sent on to the model as a question. */
@@ -201,9 +235,7 @@ export default function App() {
       if (stale()) return
       console.error(err)
       sfx.play('error')
-      store
-        .getState()
-        .setError(err instanceof Error ? err.message : 'Something went wrong.')
+      store.getState().setError(spokenFailure(err))
     } finally {
       if (!stale()) {
         speaker.current = null
@@ -463,9 +495,9 @@ export default function App() {
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
 
-    if (!usingBridge && !env.anthropicKey) {
+    if (!usingBridge && API_ROUTE === 'direct' && !env.anthropicKey) {
       s.setError(
-        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY.',
+        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY, or set VITE_API_ROUTE=proxy to use the server-side proxy.',
       )
     }
 
