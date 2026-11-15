@@ -62,6 +62,17 @@
       "
     />
 
+    <!--
+      The file has always been there (public/favicon.svg) but was never linked,
+      so every load ended with the browser falling back to /favicon.ico and
+      logging a 404. Declaring it is the whole fix.
+
+      Vite rewrites a root-absolute href against the build's base, which matters
+      on the Pages deploy where the app lives at /jarvis/ — a bare
+      href="/favicon.svg" would point at the domain root and 404 there instead.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
     <title>J.A.R.V.I.S.</title>
   </head>
   <body>
