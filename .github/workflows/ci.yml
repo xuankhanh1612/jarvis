@@ -1,0 +1,49 @@
+name: CI
+
+# Typecheck, lint and test on every pull request, and on main so a red main is
+# visible rather than discovered at deploy time. Deliberately no deploy here —
+# that lives in deploy.yml, which is the only workflow allowed to touch Pages.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          # See the note in deploy.yml: the CUDA download is useless here.
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # The bridge tests bind a loopback port and never open an agent session,
+      # so they need neither a Claude login nor a network.
+      - name: Test
+        run: npm test
+
+      # The build is part of CI as well: `tsc -b` is where most type errors
+      # actually surface, and a PR that typechecks is not the same claim as one
+      # that compiles to a working bundle.
+      - name: Build
+        env:
+          VITE_BACKEND: bridge
+        run: npm run build
