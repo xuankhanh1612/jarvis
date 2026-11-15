@@ -193,6 +193,36 @@ export const API_BASE_URL =
 export const PROXY_AVAILABLE = API_BASE_URL !== undefined
 
 
+/**
+ * Which model answers.
+ *
+ *   'anthropic' — Claude, through api/anthropic/* (the proxy) or directly.
+ *                 Everything in this repo was built against it: remote MCP
+ *                 servers, hosted web search, pause_turn continuations.
+ *
+ *   'gemini'    — Google's Flash models, through api/gemini. The free tier is
+ *                 real (roughly 10-15 requests a minute, ~1,500 a day) and
+ *                 needs no billing account. What it does not have is Anthropic's
+ *                 server-side MCP: api/gemini runs the tool loop itself and
+ *                 speaks MCP to the same servers, so the tools still work, but
+ *                 only the remote HTTP ones and only while the function is
+ *                 running.
+ *
+ * Defaults to anthropic, because a deploy that has been working should not
+ * change brain because someone added an unrelated variable.
+ */
+export const PROVIDER: 'anthropic' | 'gemini' = __JARVIS_PROVIDER__
+
+/** Injected by `define` in vite.config.ts. */
+declare const __JARVIS_PROVIDER__: 'anthropic' | 'gemini'
+
+/**
+ * The Gemini model. `gemini-3-flash` is what the free tier carries — Pro was
+ * removed from it on 1 April 2026 — and Flash is the right shape for a voice
+ * assistant anyway: the latency is what you hear.
+ */
+export const GEMINI_MODEL = str(import.meta.env.VITE_GEMINI_MODEL) ?? 'gemini-3-flash'
+
 export const env = {
   anthropicKey: str(import.meta.env.VITE_ANTHROPIC_API_KEY) ?? '',
   elevenKey: str(import.meta.env.VITE_ELEVENLABS_API_KEY) ?? '',

@@ -13,10 +13,11 @@ import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
 import * as kokoro from './lib/kokoro'
-import { API_ROUTE, TTS_ENGINE } from './config'
+import { API_ROUTE, PROVIDER, TTS_ENGINE } from './config'
 import { forTool, attention } from './lib/fillers'
 import {
   ask,
+  modelLabel,
   warm,
   interrupt,
   watchServers,
@@ -495,9 +496,12 @@ export default function App() {
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
 
-    if (!usingBridge && API_ROUTE === 'direct' && !env.anthropicKey) {
+    // Only the `direct` route needs a key in the browser, and only Claude reads
+    // it: the proxy and Gemini both keep the credential server-side, where a
+    // missing one is reported by the function in its own words.
+    if (!usingBridge && PROVIDER === 'anthropic' && API_ROUTE === 'direct' && !env.anthropicKey) {
       s.setError(
-        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY, or set VITE_API_ROUTE=proxy to use the server-side proxy.',
+        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY, set VITE_API_ROUTE=proxy to use the server-side proxy, or set VITE_PROVIDER=gemini.',
       )
     }
 
@@ -525,7 +529,11 @@ export default function App() {
     // still rising as the reactor lands.
     await new Promise((r) => setTimeout(r, 9200)) // boot sequence
     await warming
-    store.getState().setConnected(connectedLabels())
+    // The model comes first on the rail, because it is the one system whose
+    // identity changes what everything else can do. On the bridge the local
+    // agent reports its own; on the direct path this is Claude or Gemini
+    // depending on VITE_PROVIDER, and a glance at the HUD should say which.
+    store.getState().setConnected([modelLabel, ...connectedLabels()])
 
     // The analyser is what makes the reactor pulse with your voice. It needs a
     // getUserMedia stream; speech recognition does not, and gets its own. So a

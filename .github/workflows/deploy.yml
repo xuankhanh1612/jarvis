@@ -96,6 +96,11 @@ jobs:
           # fail every turn with a confusing network error. Vercel is the deploy
           # that gets the proxy; see vercel.json and api/anthropic/.
           VITE_API_ROUTE: direct
+          # Neither provider's function can exist on Pages, so the model is left
+          # to its default and the missing key is what the user sees — one
+          # sentence about a variable, rather than a 404 on a route that could
+          # never have answered.
+          VITE_PROVIDER: anthropic
           VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
           # Everything else is optional and only takes effect when set. Blank is
           # treated as unset by src/config.ts, so leaving them alone is safe.

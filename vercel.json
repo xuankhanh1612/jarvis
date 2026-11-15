@@ -8,6 +8,10 @@
     "api/anthropic/[...path].ts": {
       "memory": 1024,
       "maxDuration": 120
+    },
+    "api/gemini/index.ts": {
+      "memory": 1024,
+      "maxDuration": 120
     }
   },
   "headers": [
