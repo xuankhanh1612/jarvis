@@ -215,6 +215,17 @@ export default function App() {
             spk.say(forTool(name))
           }
         },
+        /**
+         * A configuration warning from the brain — today only the Gemini path
+         * emits one, for a key in a format Google will not accept. Shown on the
+         * HUD and not spoken: it is a note about the deployment, and reading a
+         * key format aloud is worse than useless. The error that follows, if the
+         * turn does fail, is the one that gets spoken.
+         */
+        onNotice: (text) => {
+          if (stale()) return
+          store.getState().setError(text)
+        },
       })
 
       if (stale()) return

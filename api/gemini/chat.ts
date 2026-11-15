@@ -131,6 +131,11 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         // something true to show and a broken server is visible rather than
         // silent.
         send({ type: 'servers', servers: [...new Set(tools.map((t) => t.server))] })
+
+        // A key format that cannot work is worth saying once, up front, rather
+        // than letting it surface as an opaque 401 mid-answer.
+        const format = keyFormatWarning(apiKey)
+        if (format) send({ type: 'notice', text: format })
         for (const failure of failures) send({ type: 'notice', text: failure })
 
         await runTurn({ body, apiKey, tools, send, signal: request.signal })
@@ -315,7 +320,13 @@ async function ask(args: {
   }
 
   if (!response.ok || parsed.error) {
-    const message = parsed.error?.message ?? `HTTP ${response.status}`
+    // The message alone is not enough to classify: Google puts the useful token
+    // (`UNAUTHENTICATED`, `RESOURCE_EXHAUSTED`) in `status`, and sometimes only
+    // the HTTP code carries it. All three are joined so the reader below has
+    // everything in one string.
+    const message = [parsed.error?.message, parsed.error?.status, `HTTP ${response.status}`]
+      .filter(Boolean)
+      .join(' | ')
     throw new Error(message)
   }
 
@@ -337,12 +348,25 @@ function humanToolName(namespaced: string): string {
 /**
  * Turn Google's error strings into sentences that name the fix.
  *
- * The three that actually happen on a free tier are a bad key, a quota, and a
- * model name that does not exist in the region — and the raw forms of all three
- * are unhelpful on a HUD.
+ * The four that actually happen on a free tier are a bad key, the new `AQ.`
+ * key format, a quota, and a model name that does not exist in the region — and
+ * the raw forms of all four are unhelpful on a HUD.
+ *
+ * The `AQ.` case is worth its own line because it does not look like a bad key
+ * and cannot be fixed by re-copying it. Google AI Studio began issuing
+ * `AQ.Ab8RN6…` keys alongside the older `AIzaSy…` ones, and on
+ * generativelanguage.googleapis.com they are rejected with a 401 whose reason is
+ * `ACCESS_TOKEN_TYPE_UNSUPPORTED` — the key is real, the account is fine, and
+ * every auth method (header, query parameter, bearer) fails identically. The
+ * only working path is an `AIza` key, typically from an older API-key project.
+ * Reporting this as "invalid key" sends the user round a loop of regenerating
+ * the same unusable thing.
  */
 function readableUpstreamError(message: string): string {
-  if (/API key not valid|API_KEY_INVALID|permission/i.test(message)) {
+  if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|UNAUTHENTICATED|HTTP 401/i.test(message)) {
+    return 'Google refused a key in the new AQ. format. AI Studio keys that start AQ.Ab8RN6… are rejected by the Gemini API with ACCESS_TOKEN_TYPE_UNSUPPORTED regardless of how they are sent. Create an AIza… key instead — usually from an older project in the key list — and set that as GEMINI_API_KEY.'
+  }
+  if (/API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|permission/i.test(message)) {
     return 'The Gemini key was refused. Check GEMINI_API_KEY in the deployment settings.'
   }
   if (/quota|RESOURCE_EXHAUSTED|429/i.test(message)) {
@@ -352,6 +376,20 @@ function readableUpstreamError(message: string): string {
     return 'That Gemini model is not available on this key. Try VITE_GEMINI_MODEL=gemini-3-flash.'
   }
   return message
+}
+
+/**
+ * Warn about an unusable key format at the top of a turn, before Google does.
+ *
+ * The request would fail either way, but this way the sentence arrives without
+ * waiting for a round trip and it is the same sentence every time, rather than
+ * whatever Google's error wording happens to be this month.
+ */
+export function keyFormatWarning(apiKey: string): string | null {
+  if (/^AQ\./.test(apiKey)) {
+    return 'This key starts AQ. — Google issues those but rejects them on the Gemini API. An AIza… key will work; see README, "Free tiers".'
+  }
+  return null
 }
 
 function json(status: number, payload: unknown): Response {

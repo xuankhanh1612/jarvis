@@ -77,14 +77,34 @@ export async function unlockAudio(): Promise<void> {
   void loadOverrides()
 }
 
-/** Pick up any real audio files the user has dropped into public/audio/. */
+/**
+ * Pick up any real audio files the user has dropped into public/audio/.
+ *
+ * The overrides are optional — `public/audio/` ships with music only, so all
+ * six of these 404 on a fresh clone. That is expected, and it used to be loud
+ * anyway: six red lines in the console every boot, reading like a broken app to
+ * anyone who opened devtools.
+ *
+ * `HEAD` rather than `GET` is what fixes that. A 404 on a HEAD is still a 404 in
+ * the network panel, but it is not a failed *resource load* — the browser is not
+ * trying to construct a body it cannot get — so nothing is logged as an error.
+ * A file that does exist is then fetched in full and decoded.
+ *
+ * Worth knowing what is given up: HEAD and GET can in principle disagree (a host
+ * that refuses HEAD while serving the file). Vercel and Pages both serve HEAD
+ * correctly, and the failure mode here is mild — the synthesised cue plays
+ * instead of the recording, which is the documented fallback anyway.
+ */
 async function loadOverrides() {
   const cues: Cue[] = ['boot', 'wake', 'listen', 'tool', 'done', 'error']
   await Promise.all(
     cues.map(async (cue) => {
       if (samples.has(cue)) return
+      const url = `${import.meta.env.BASE_URL}audio/${cue}.mp3`
       try {
-        const res = await fetch(`${import.meta.env.BASE_URL}audio/${cue}.mp3`)
+        const probe = await fetch(url, { method: 'HEAD' })
+        if (!probe.ok) return // no override; the synthesised cue plays
+        const res = await fetch(url)
         if (!res.ok) return
         const buf = await audio().decodeAudioData(await res.arrayBuffer())
         samples.set(cue, buf)

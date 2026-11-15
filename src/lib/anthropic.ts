@@ -40,8 +40,15 @@ export type Msg = Anthropic.Beta.BetaMessageParam
 export type AskHandlers = {
   /** Fires for each chunk of the spoken answer. */
   onText: (delta: string) => void
-  /** Fires when Claude starts running a remote tool. */
+  /** Fires when the model starts running a tool. */
   onTool: (name: string) => void
+  /**
+   * A warning worth showing but not worth stopping for: a credential in a format
+   * that cannot work, an MCP server that would not connect. Only the Gemini path
+   * emits these today — Anthropic does its own discovery server-side, so it has
+   * nothing to report — which is why this is optional rather than required.
+   */
+  onNotice?: (text: string) => void
 }
 
 /** The stream for the turn in flight, so a barge-in can abort it. Without this

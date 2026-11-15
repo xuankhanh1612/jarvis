@@ -104,10 +104,15 @@ export async function ask(
             // status code. Rethrown so App.tsx shows it in the one place
             // failures are shown.
             throw new Error(typeof event.text === 'string' ? event.text : 'Gemini failed.')
+          } else if (event.type === 'notice' && typeof event.text === 'string') {
+            // A warning that arrived before the answer: a key format that
+            // cannot work, or an MCP server that failed to connect. Shown on
+            // the HUD rather than thrown — the turn may still succeed, and if
+            // it does not, the error that follows says why.
+            handlers.onNotice?.(event.text)
           }
-          // `servers` and `notice` are informational. The HUD gets its list
-          // from config, so nothing here needs them yet; ignoring them keeps
-          // that decision in one place.
+          // `servers` is informational: the HUD's list comes from config, which
+          // is the same list the request was built from.
         }
       }
     }

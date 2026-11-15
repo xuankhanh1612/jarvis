@@ -351,3 +351,43 @@ const jsonRequest = (payload) =>
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   })
+
+/* ------------------------------------------------------- unusable key formats */
+
+test('names the AQ. key problem instead of reporting an invalid key', async () => {
+  // AI Studio started issuing AQ.Ab8RN6… keys, and the Gemini API rejects them
+  // with a 401 ACCESS_TOKEN_TYPE_UNSUPPORTED no matter how they are sent. Calling
+  // that "invalid key" sends the user round a loop of regenerating the same
+  // unusable thing, so it gets its own sentence.
+  stubFetch()
+  globalThis.fetch = async () =>
+    jsonResponse({
+      error: { message: 'Request had invalid authentication credentials.', status: 'UNAUTHENTICATED' },
+    })
+
+  const events = await readEvents(
+    await handleChat(jsonRequest(body({ servers: [] })), { GEMINI_API_KEY: 'AQ.Ab8RN6test' }),
+  )
+  const error = events.find((e) => e.type === 'error')
+  assert.match(error.text, /AQ\./)
+  assert.match(error.text, /AIza/)
+  assert.match(error.text, /ACCESS_TOKEN_TYPE_UNSUPPORTED/)
+})
+
+test('warns about an AQ. key before the request goes out', async () => {
+  stubFetch({ geminiParts: [{ parts: [{ text: 'hi' }] }] })
+  const events = await readEvents(
+    await handleChat(jsonRequest(body({ servers: [] })), { GEMINI_API_KEY: 'AQ.Ab8RN6test' }),
+  )
+  const notice = events.find((e) => e.type === 'notice')
+  assert.ok(notice, 'a notice should arrive up front')
+  assert.match(notice.text, /AIza/)
+})
+
+test('says nothing about a key format it does not recognise', async () => {
+  stubFetch({ geminiParts: [{ parts: [{ text: 'hi' }] }] })
+  const events = await readEvents(
+    await handleChat(jsonRequest(body({ servers: [] })), { GEMINI_API_KEY: 'AIzaSyTest' }),
+  )
+  assert.equal(events.find((e) => e.type === 'notice'), undefined)
+})
