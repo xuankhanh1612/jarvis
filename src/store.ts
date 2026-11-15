@@ -219,6 +219,14 @@ type State = {
   turns: Turn[]
   activeTool: string | null
   error: string | null
+  /**
+   * A warning about the deployment rather than the turn: today, a Gemini key in
+   * a format Google will not accept. Kept apart from `error` because it arrives
+   * before the answer and usually does not stop it — a successful reply and a
+   * note about the key are not the same kind of thing, and sharing one slot
+   * meant the note disappeared as soon as speech started.
+   */
+  notice: string | null
   connected: string[]
   /** Name of the speech-synthesis voice in use, shown in the HUD. */
   voice: string
@@ -257,6 +265,7 @@ type State = {
   setCaption: (c: string) => void
   setActiveTool: (t: string | null) => void
   setError: (e: string | null) => void
+  setNotice: (n: string | null) => void
   setConnected: (c: string[]) => void
   pushTurn: (t: Turn) => void
   appendToLastTurn: (text: string) => void
@@ -277,6 +286,7 @@ export const useStore = create<State>((set) => ({
   turns: [],
   activeTool: null,
   error: null,
+  notice: null,
   connected: [],
   voice: '',
   gestures: false,
@@ -351,6 +361,7 @@ export const useStore = create<State>((set) => ({
   setCaption: (caption) => set({ caption }),
   setActiveTool: (activeTool) => set({ activeTool }),
   setError: (error) => set({ error }),
+  setNotice: (notice) => set({ notice }),
   setConnected: (connected) => set({ connected }),
   pushTurn: (turn) => set((s) => ({ turns: [...s.turns.slice(-40), turn] })),
   appendToLastTurn: (text) =>

@@ -153,6 +153,7 @@ export function Hud() {
   const activeTool = useStore((s) => s.activeTool)
   const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
+  const notice = useStore((s) => s.notice)
   const level = useStore((s) => s.level)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
@@ -309,6 +310,12 @@ export function Hud() {
       {ui.chrome.suggestions && <Suggestions />}
 
       {error && <div className="error">{error}</div>}
+
+      {/* Its own line above the error, in amber rather than red: this is a note
+          about the deployment — usually "that Gemini key will not work" — and
+          the turn it accompanies may well succeed. Red is for the turns that
+          did not. */}
+      {notice && <div className="notice">{notice}</div>}
 
       <footer className="hud-bottom">
         <span className="hint">

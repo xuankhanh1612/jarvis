@@ -387,7 +387,7 @@ function readableUpstreamError(message: string): string {
  */
 export function keyFormatWarning(apiKey: string): string | null {
   if (/^AQ\./.test(apiKey)) {
-    return 'This key starts AQ. — Google issues those but rejects them on the Gemini API. An AIza… key will work; see README, "Free tiers".'
+    return 'This key starts AQ. — Google issues those but rejects them on the Gemini API. Replace it with an AIza… key; see README, "Gemini: what works, and what does not".'
   }
   return null
 }
