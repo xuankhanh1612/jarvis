@@ -134,7 +134,7 @@ export type ApiRoute = 'proxy' | 'direct'
  * How the browser reaches the Claude API.
  *
  *   'proxy'  — same-origin `POST /api/anthropic/v1/messages`, answered by
- *              api/anthropic/[...path].mts on the host. The key lives in that
+ *              api/anthropic/[...path].ts on the host. The key lives in that
  *              server's environment and never enters the bundle. This is the
  *              only shape that is safe on a public URL, and it is what the
  *              Vercel deploy uses.

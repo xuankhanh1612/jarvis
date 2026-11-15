@@ -12,7 +12,7 @@ import {
  * Two ways to reach the API, one client.
  *
  * In `proxy` mode `baseURL` is `/api/anthropic`, a same-origin function defined
- * in api/anthropic/[...path].mts. The SDK appends its normal paths (`/v1/messages`
+ * in api/anthropic/[...path].ts. The SDK appends its normal paths (`/v1/messages`
  * and so on) and posts them there instead of to Anthropic; the function adds the
  * key server-side and streams the answer back. Nothing else in this file had to
  * change, because MCP servers, hosted tools and `pause_turn` continuations were

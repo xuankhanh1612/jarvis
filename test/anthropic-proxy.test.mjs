@@ -1,18 +1,19 @@
 /**
- * Tests for the server-side Claude proxy in api/anthropic/[...path].mts.
+ * Tests for the server-side Claude proxy in api/anthropic/[...path].ts.
  *
  * These drive the handler directly with a synthetic `Request`, so they need no
  * deployment and no network: the interesting behaviour is which requests get
  * through, which headers survive in both directions, and what the browser sees
  * when the deployment is misconfigured.
  *
- * The file is `.mts` rather than `.ts` for a reason worth keeping. Both CI and
- * the Vercel deploy run Node 20, and Node only learned to strip TypeScript
- * types from modules in 22 — a `.ts` module here imported cleanly on a dev
- * machine and failed on CI with ERR_INVALID_TYPESCRIPT_SYNTAX. An `.mts`
- * extension marks it unambiguously as an ES module, so `tsx` (already a dev
- * dependency) can load it on any supported Node, and Vercel's own compiler does
- * not care either way.
+ * `npm test` runs with `--import tsx`, and that import is load-bearing rather
+ * than convenience. Both CI and the Vercel deploy run Node 20, and Node only
+ * learned to strip TypeScript types from modules in 22 — a plain import of a
+ * `.ts` module here passed on a dev machine and failed on CI with
+ * ERR_INVALID_TYPESCRIPT_SYNTAX. tsx handles the transpile on every supported
+ * Node. A `.mts` extension would also have worked, and does not: Vercel's `api`
+ * directory does not recognise it, and the deploy fails with "the pattern does
+ * not match any Serverless Functions".
  *
  * No test here uses a real key, and none contacts Anthropic: `fetch` is stubbed
  * where a request would go out.
@@ -21,7 +22,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { default: handler } = await import('../api/anthropic/[...path].mts')
+const { default: handler } = await import('../api/anthropic/[...path].ts')
 
 /** What the stub `fetch` was handed, so assertions can look at the relay. */
 let seen = null

@@ -424,7 +424,7 @@ serves files and nothing else; Vercel runs a function.
 
 ### What is different here
 
-The app talks to Claude through `api/anthropic/[...path].mts`, a same-origin
+The app talks to Claude through `api/anthropic/[...path].ts`, a same-origin
 serverless proxy. The browser posts to `/api/anthropic/v1/messages`; the function
 adds the key from its environment and forwards the streaming response back.
 
