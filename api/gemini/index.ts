@@ -1,9 +1,9 @@
 /**
  * `POST /api/gemini` — the Gemini chat endpoint.
  *
- * Kept separate from `./chat.mts` for one reason worth writing down: Vercel
+ * Kept separate from `./chat.ts` for one reason worth writing down: Vercel
  * routes by file, and a route has to have a *default export* the platform can
- * call. `chat.mts` exports a named `handleChat` so it can be imported by the
+ * call. `chat.ts` exports a named `handleChat` so it can be imported by the
  * tests without the test file pretending to be a deployment, and this file is
  * the two lines of glue that make it addressable.
  *
@@ -13,7 +13,7 @@
  * produces an opaque 500 on every turn.
  */
 
-import { handleChat, type ChatBody } from './chat.mts'
+import { handleChat, type ChatBody } from './chat.js'
 
 export default async function handler(
   first: Request | NodeRequest,

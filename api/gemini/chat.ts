@@ -12,7 +12,7 @@
  * Anthropic's API takes `mcp_servers` as a parameter and dials them itself. Its
  * hosted `web_search` is likewise its own. Gemini has neither, so this file does
  * both jobs: it discovers tools from the configured remote MCP servers (see
- * ./mcp.mts), hands them to Gemini as function declarations, and runs the call
+ * ./mcp.ts), hands them to Gemini as function declarations, and runs the call
  * loop itself until the model stops asking for tools.
  *
  * The consequence worth stating plainly: tool calls here execute *inside this
@@ -28,7 +28,7 @@
  * the last token had been generated — a walkie-talkie instead of a conversation.
  */
 
-import { callTool, discoverTools, type McpTool } from './mcp.mts'
+import { callTool, discoverTools, type McpTool } from './mcp.js'
 
 /** Google's REST surface. Fixed, for the same reason the Anthropic one is. */
 const UPSTREAM = 'https://generativelanguage.googleapis.com/v1beta'

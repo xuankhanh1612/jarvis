@@ -1,6 +1,6 @@
 /**
- * Tests for the Gemini path: the MCP client in api/gemini/mcp.mts and the chat
- * adapter in api/gemini/chat.mts.
+ * Tests for the Gemini path: the MCP client in api/gemini/mcp.ts and the chat
+ * adapter in api/gemini/chat.ts.
  *
  * Everything here runs against a stubbed `fetch`, so no MCP server and no Google
  * endpoint is contacted and no key is needed. What is worth testing is the part
@@ -13,9 +13,9 @@
 import { test, before, after, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
-const mcp = await import('../api/gemini/mcp.mts')
-const { handleChat } = await import('../api/gemini/chat.mts')
-const { default: endpoint } = await import('../api/gemini/index.mts')
+const mcp = await import('../api/gemini/mcp.ts')
+const { handleChat } = await import('../api/gemini/chat.ts')
+const { default: endpoint } = await import('../api/gemini/index.ts')
 
 const realFetch = globalThis.fetch
 
