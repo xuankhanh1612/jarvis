@@ -144,21 +144,21 @@ export type ApiRoute = 'proxy' | 'direct'
  *              static host, but anyone who opens devtools can read and spend
  *              the key. Fine on your own machine; not fine deployed.
  *
- * The defaults are chosen so the fallback is still honest: an explicit
+ * The value is resolved in vite.config.ts and injected as a literal rather than
+ * read from `import.meta.env` here, which is what makes a `direct` build contain
+ * no trace of the proxy route at all: the bundler compares a literal against
+ * `'proxy'`, folds the branch, and drops the URL. See deploy.yml, which has to
+ * be able to prove that about a Pages artifact.
+ *
+ * Its precedence, kept in step with the config file: an explicit
  * `VITE_API_ROUTE` wins, otherwise the key's presence selects direct, and with
  * neither the proxy is assumed — because that is the mode that works when
  * someone deploys this without reading the code first.
  */
-export const API_ROUTE: ApiRoute = (() => {
-  const explicit = str(import.meta.env.VITE_API_ROUTE)
-  if (explicit === 'proxy' || explicit === 'direct') return explicit
-  if (explicit !== undefined) {
-    console.warn(
-      `[jarvis] VITE_API_ROUTE="${explicit}" is not one of proxy | direct — ignoring it.`,
-    )
-  }
-  return str(import.meta.env.VITE_ANTHROPIC_API_KEY) ? 'direct' : 'proxy'
-})()
+export const API_ROUTE: ApiRoute = __JARVIS_API_ROUTE__
+
+/** Injected by `define` in vite.config.ts. */
+declare const __JARVIS_API_ROUTE__: ApiRoute
 
 /**
  * What the SDK is pointed at.
@@ -182,6 +182,16 @@ export const API_BASE_URL =
   API_ROUTE === 'proxy'
     ? new URL(`${import.meta.env.BASE_URL}api/anthropic`, window.location.origin).href
     : undefined
+
+/**
+ * Whether this build can serve the proxy at all.
+ *
+ * Read by the Pages deploy's assertion more than by the app: a `direct` build
+ * contains no `/api/anthropic`, and deploy.yml fails if that string appears in
+ * an artifact destined for Pages, which cannot serve a function.
+ */
+export const PROXY_AVAILABLE = API_BASE_URL !== undefined
+
 
 export const env = {
   anthropicKey: str(import.meta.env.VITE_ANTHROPIC_API_KEY) ?? '',

@@ -22,10 +22,37 @@ import react from '@vitejs/plugin-react'
  */
 const base = process.env.VITE_BASE || '/'
 
+/**
+ * Resolve how this build reaches the Claude API, at build time.
+ *
+ * This is deliberately a `define` rather than a plain runtime read of
+ * `import.meta.env`, and the difference is not stylistic. A GitHub Pages build
+ * is pinned to `direct` because Pages cannot serve /api/anthropic, and
+ * deploy.yml fails the build if that route string ends up in the artifact —
+ * which it did, because the expression that derives the proxy URL was evaluated
+ * at runtime and so could not be folded away, even in a build that never uses
+ * it. Defining the value as a literal lets the bundler see
+ * `'direct' === 'proxy'` and delete the branch, so the string is genuinely
+ * absent rather than merely unreachable.
+ *
+ * The precedence matches src/config.ts: an explicit route wins, otherwise the
+ * presence of a key selects direct, otherwise proxy — the mode that works when
+ * someone deploys this without reading the code.
+ */
+const apiRoute =
+  process.env.VITE_API_ROUTE === 'proxy' || process.env.VITE_API_ROUTE === 'direct'
+    ? process.env.VITE_API_ROUTE
+    : process.env.VITE_ANTHROPIC_API_KEY?.trim()
+      ? 'direct'
+      : 'proxy'
+
 // https://vite.dev/config/
 export default defineConfig({
   base,
   plugins: [react()],
+  define: {
+    __JARVIS_API_ROUTE__: JSON.stringify(apiRoute),
+  },
   server: {
     // Honour PORT so a second instance can run alongside the first. The bridge
     // only accepts sockets from localhost:5173-5199, so stay inside that range

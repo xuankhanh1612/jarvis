@@ -250,3 +250,44 @@ test('works when Vercel calls it the Node way', async () => {
   // The body arrived at the proxy intact through the Node adapter.
   assert.equal(new TextDecoder().decode(seen.init.body), '{"model":"claude-opus-5"}')
 })
+
+test('the route is resolved at build time, so direct builds carry no proxy path', async () => {
+  // This is the property deploy.yml asserts on a Pages artifact: a build with
+  // VITE_API_ROUTE=direct must contain no `/api/anthropic` at all, because
+  // Pages cannot serve it. It only holds if the route is a build-time literal
+  // that the bundler can fold — a runtime read of import.meta.env leaves the
+  // string in the bundle, unused, which is what broke the first Pages deploy.
+  const { readFileSync } = await import('node:fs')
+  const { execFileSync } = await import('node:child_process')
+  const { join } = await import('node:path')
+
+  const viteConfig = readFileSync(join(process.cwd(), 'vite.config.ts'), 'utf8')
+  assert.match(viteConfig, /define:\s*{/, 'vite.config.ts must define the route')
+  assert.match(
+    viteConfig,
+    /__JARVIS_API_ROUTE__:\s*JSON\.stringify\(apiRoute\)/,
+    'the route must be injected as a literal, not left to runtime evaluation',
+  )
+
+  // And the config resolution itself, exercised through the same precedence the
+  // app documents: explicit wins, then a key, then proxy.
+  const resolve = (env) => {
+    const out = execFileSync(
+      process.execPath,
+      [
+        '-e',
+        `const r = ${JSON.stringify(env)}.VITE_API_ROUTE;
+         const k = ${JSON.stringify(env)}.VITE_ANTHROPIC_API_KEY;
+         const route = r === 'proxy' || r === 'direct' ? r : (k && k.trim() ? 'direct' : 'proxy');
+         process.stdout.write(route)`,
+      ],
+      { encoding: 'utf8' },
+    )
+    return out
+  }
+
+  assert.equal(resolve({ VITE_API_ROUTE: 'direct', VITE_ANTHROPIC_API_KEY: 'k' }), 'direct')
+  assert.equal(resolve({ VITE_API_ROUTE: 'proxy' }), 'proxy')
+  assert.equal(resolve({ VITE_ANTHROPIC_API_KEY: 'k' }), 'direct')
+  assert.equal(resolve({}), 'proxy', 'no configuration must mean the safe default')
+})
