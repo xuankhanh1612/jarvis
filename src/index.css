@@ -321,6 +321,23 @@ body::after {
   text-align: center;
 }
 
+/* Sits above the error rather than on top of it: when a key is wrong both can
+   appear, and the notice explains what the error is about. Amber, not red — the
+   turn it came with usually still answered. */
+.notice {
+  position: absolute;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  color: #ffb454;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  max-width: 70vw;
+  text-align: center;
+  opacity: 0.9;
+}
+
 .hud-bottom {
   position: absolute;
   bottom: 44px;

@@ -434,11 +434,33 @@ and a model needs a key on the server. There are three ways to pay nothing:
 `api/gemini`. The key stays server-side, exactly like the Anthropic proxy, and
 comes free from <https://aistudio.google.com/apikey>.
 
+**The key must start `AIza`.** AI Studio lists two shapes of key and only one of
+them authenticates:
+
+| Prefix | Looks like | Works on `generativelanguage` |
+|---|---|---|
+| `AIza…` | `AIzaSyD…` | **yes** |
+| `AQ.…` | `AQ.Ab8RN6…` | **no — 401 `ACCESS_TOKEN_TYPE_UNSUPPORTED`** |
+
+The `AQ.` form is the one AI Studio now offers by default, and it is not a bad
+key: the account is fine, the key is real, and every auth method — `x-goog-api-key`
+header, `?key=` query, `Authorization: Bearer`, `v1` and `v1beta` alike — comes
+back with the same 401. Google's own forum threads carry the same report and the
+same remedy, which is to use an `AIza` key, typically from an older API-key
+project in the same account. Some accounts have been restricted to issuing
+`AQ.`-only keys; those need an older project's key or a different account.
+
+`api/gemini` checks for this up front and says so on the HUD instead of letting
+Google answer with an opaque 401 mid-turn, so if you see that warning the path
+is a key swap, not a code change. Worth doing before September 2026 regardless —
+that is the published deadline for standard (`AIza`) keys, which is presumably
+when the `AQ.` form starts working and this table inverts.
+
 The interesting part is the tool loop, because Google's API has no equivalent of
 Anthropic's `mcp_servers` parameter. Anthropic dials your MCP servers from its
 own infrastructure; nothing does that for Gemini. So `api/gemini` does it
-itself — `api/gemini/mcp.mts` is a small MCP client (Streamable HTTP transport,
-JSON-RPC handshake, `tools/list`, `tools/call`) and `api/gemini/chat.mts` runs
+itself — `api/gemini/mcp.ts` is a small MCP client (Streamable HTTP transport,
+JSON-RPC handshake, `tools/list`, `tools/call`) and `api/gemini/chat.ts` runs
 the call loop until the model stops asking for tools.
 
 That has consequences worth knowing before you switch:
@@ -513,7 +535,7 @@ deploys this without reading the code first.
    |---|---|---|
    | `ANTHROPIC_API_KEY` | `sk-ant-…` | The only required one. Server-side only. |
    | `VITE_API_ROUTE` | `proxy` | Set for clarity; it is the default. |
-   | `GEMINI_API_KEY` | `…` | Only for `VITE_PROVIDER=gemini`. Free, no card. |
+   | `GEMINI_API_KEY` | `AIza…` | Only for `VITE_PROVIDER=gemini`. Free, no card. Must start `AIza`, not `AQ.` — see [Gemini](#gemini-what-works-and-what-does-not). |
    | `VITE_PROVIDER` | `anthropic` | Or `gemini`, for the free tier. |
    | `VITE_TTS_ENGINE` | `system` | Or `kokoro` for the neural voice. |
    | `VITE_ELEVENLABS_API_KEY` | `…` | Optional, better voice. |

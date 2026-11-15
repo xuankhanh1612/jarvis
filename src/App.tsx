@@ -169,6 +169,10 @@ export default function App() {
     s.clearPanels()
     s.clearBlades()
     s.setCaption('')
+    // Last turn's warning goes with last turn's answer. There is one exception
+    // to clearing here — the notice this turn itself emits, which arrives a
+    // moment later through onNotice and is exactly the one worth keeping.
+    s.setNotice(null)
     s.pushTurn({ id: newId(), role: 'user', text: said })
     s.setPhase('thinking')
 
@@ -224,7 +228,11 @@ export default function App() {
          */
         onNotice: (text) => {
           if (stale()) return
-          store.getState().setError(text)
+          // A separate slot from `error`. The notice arrives before the answer
+          // and the answer usually succeeds — a failed turn and a note about
+          // the deployment are different things, and sharing a slot meant the
+          // note vanished the moment speech began.
+          store.getState().setNotice(text)
         },
       })
 
@@ -285,6 +293,7 @@ export default function App() {
     if (phase === 'offline' || phase === 'boot') return
 
     store.getState().setError(null)
+    store.getState().setNotice(null)
     sfx.play('wake')
 
     // "Jarvis, what's happening in AI this week" in one breath. Waiting for a

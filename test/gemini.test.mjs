@@ -29,7 +29,7 @@ let calls = []
  * stream, because the spec allows both for the same request and only one of them
  * tends to be what a developer wrote their parser against.
  */
-function stubFetch({ mode = 'json', tools = [], toolResult = 'ok', geminiParts = [] } = {}) {
+function stubFetch({ mode = 'json', tools = [], toolResult = 'ok', geminiParts = [], geminiError = null } = {}) {
   calls = []
   globalThis.fetch = async (url, init) => {
     const target = String(url)
@@ -37,6 +37,10 @@ function stubFetch({ mode = 'json', tools = [], toolResult = 'ok', geminiParts =
     calls.push({ url: target, body, headers: new Headers(init?.headers) })
 
     if (target.includes('generativelanguage.googleapis.com')) {
+      // An error body, when a test wants the round trip to fail rather than
+      // answer. Google returns 401/429 as JSON, so this is the shape that
+      // actually reaches the client and gets classified.
+      if (geminiError) return jsonResponse({ error: geminiError }, 401)
       // A queue of model replies: one per round of the tool loop.
       const reply = geminiParts.shift() ?? { parts: [{ text: 'done' }] }
       return jsonResponse({ candidates: [{ content: { parts: reply.parts } }] })
@@ -390,4 +394,30 @@ test('says nothing about a key format it does not recognise', async () => {
     await handleChat(jsonRequest(body({ servers: [] })), { GEMINI_API_KEY: 'AIzaSyTest' }),
   )
   assert.equal(events.find((e) => e.type === 'notice'), undefined)
+})
+
+/* ------------------------------------------------- notices are not failures */
+
+test('a notice and an error are separate events, not one overwriting the other', async () => {
+  // The reason this matters is concrete: a valid-looking but unusable AQ. key
+  // produces a notice up front, and then the turn fails with an error. If the
+  // client funnelled both into the same handler the HUD had one line, and the
+  // note explaining the failure was what got overwritten by it.
+  stubFetch({
+    geminiError: { message: 'Request had invalid authentication credentials.', status: 'UNAUTHENTICATED' },
+  })
+
+  const events = await readEvents(
+    await handleChat(jsonRequest(body({ servers: [] })), { GEMINI_API_KEY: 'AQ.Ab8RN6test' }),
+  )
+
+  const notices = events.filter((e) => e.type === 'notice')
+  const errors = events.filter((e) => e.type === 'error')
+
+  assert.equal(notices.length, 1, 'exactly one notice, before the failure')
+  assert.equal(errors.length, 1)
+  // The notice is emitted first, which is what lets the UI keep it visible while
+  // the error is what gets spoken.
+  assert.ok(events.indexOf(notices[0]) < events.indexOf(errors[0]))
+  assert.notEqual(notices[0].text, errors[0].text)
 })
