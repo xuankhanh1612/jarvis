@@ -1,5 +1,4 @@
-import { BACKEND } from '../config'
-import * as direct from './anthropic'
+import { BACKEND, PROVIDER } from '../config'
 import * as bridge from './bridge'
 import type { AskHandlers, Msg } from './anthropic'
 import type { Blade, Panel } from '../store'
@@ -15,12 +14,38 @@ export type { ConnectionState } from './bridge'
  *            existing Claude Code login, so no API key, and every MCP server
  *            you have configured is available, including local stdio ones.
  *
- *   direct — the browser calls the Claude API itself. No process to run and it
- *            deploys as a static site, but it needs an API key in the bundle
- *            and can only use remote HTTP MCP servers.
+ *   direct — a server-side function holds the key and the browser talks to it.
+ *            No process to run, deploys as a static site, and only remote HTTP
+ *            MCP servers can be reached.
+ *
+ * The direct path has two models behind it, chosen with VITE_PROVIDER: Claude
+ * (./anthropic) and Gemini (./gemini). Both answer with the same shape, so the
+ * only thing that changes downstream is which one is paying attention.
  */
 
 export const usingBridge = BACKEND === 'bridge'
+
+/** Which model is answering on the direct path. Unused in bridge mode, where
+ *  the local agent decides for itself. */
+export const modelLabel = PROVIDER === 'gemini' ? 'Gemini' : 'Claude'
+
+/**
+ * The direct path's implementation, loaded on demand.
+ *
+ * Loaded rather than imported, and that is not a micro-optimisation: Pages
+ * cannot serve either function, so its build pins `VITE_API_ROUTE=direct` and
+ * deploy.yml fails if an artifact mentions a route it cannot serve. A static
+ * import of both backends leaves both route strings in the bundle, because
+ * nothing can prove at build time which one will run. A dynamic import behind a
+ * literal comparison lets the bundler drop the branch that will never execute
+ * — and with it the other provider's endpoint entirely.
+ *
+ * The cost is one await, once, on the first turn. The benefit is that a
+ * `gemini` build carries no Anthropic code and a `direct` build carries neither
+ * endpoint.
+ */
+const remote =
+  PROVIDER === 'gemini' ? await import('./gemini') : await import('./anthropic')
 
 /** Conversation state lives in the bridge session, so history is only threaded
  *  through on the direct path. */
@@ -31,7 +56,7 @@ export async function ask(
 ): Promise<{ text: string; tools: string[] }> {
   return usingBridge
     ? bridge.ask(prompt, handlers)
-    : direct.ask([...history, { role: 'user', content: prompt }], handlers)
+    : remote.ask([...history, { role: 'user', content: prompt }], handlers)
 }
 
 export async function warm(): Promise<void> {
@@ -92,7 +117,7 @@ export function watchCapture(
  */
 export function cancel(): void {
   if (usingBridge) bridge.cancel()
-  else direct.cancel()
+  else remote.cancel()
 }
 
 /** The older name for `cancel()`. */
@@ -127,5 +152,5 @@ export function watchConnection(
 
 /** Labels for the HUD's SYSTEMS rail. */
 export function connectedLabels(): string[] {
-  return usingBridge ? bridge.bridgeServers() : direct.connectedLabels()
+  return usingBridge ? bridge.bridgeServers() : remote.connectedLabels()
 }

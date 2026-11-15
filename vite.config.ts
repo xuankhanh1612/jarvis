@@ -52,6 +52,11 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __JARVIS_API_ROUTE__: JSON.stringify(apiRoute),
+    // Same treatment, same reason: a `direct` build on Pages must not contain
+    // the string `/api/gemini` either. See the note above apiRoute.
+    __JARVIS_PROVIDER__: JSON.stringify(
+      process.env.VITE_PROVIDER === 'gemini' ? 'gemini' : 'anthropic',
+    ),
   },
   server: {
     // Honour PORT so a second instance can run alongside the first. The bridge

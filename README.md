@@ -417,6 +417,64 @@ Try hand control specifically. It is the one feature whose assets live outside
 
 ---
 
+## Free tiers, and what the models can actually do
+
+The deploy needs *some* credential, because a static site cannot hold a secret
+and a model needs a key on the server. There are three ways to pay nothing:
+
+| Route | Cost | Tools | Trade-off |
+|---|---|---|---|
+| **Bridge** (`npm run bridge`) | included in Claude Code | everything, incl. local stdio | must run on your own machine; cannot be a public URL |
+| **Gemini free tier** (`VITE_PROVIDER=gemini`) | $0, no card | remote MCP only, per turn | ~10–15 req/min, ~1,500/day, Flash only |
+| **Anthropic** (default) | per token | everything, server-side | the bill |
+
+### Gemini: what works, and what does not
+
+`VITE_PROVIDER=gemini` swaps the brain to Google's Flash models through
+`api/gemini`. The key stays server-side, exactly like the Anthropic proxy, and
+comes free from <https://aistudio.google.com/apikey>.
+
+The interesting part is the tool loop, because Google's API has no equivalent of
+Anthropic's `mcp_servers` parameter. Anthropic dials your MCP servers from its
+own infrastructure; nothing does that for Gemini. So `api/gemini` does it
+itself — `api/gemini/mcp.mts` is a small MCP client (Streamable HTTP transport,
+JSON-RPC handshake, `tools/list`, `tools/call`) and `api/gemini/chat.mts` runs
+the call loop until the model stops asking for tools.
+
+That has consequences worth knowing before you switch:
+
+- **Remote HTTP servers only.** A stdio server needs a machine to run on, and a
+  function is not one.
+- **Tool calls happen inside the request.** Anthropic can pause a turn
+  (`pause_turn`) and resume it; this cannot, so a long chain is bounded by
+  `maxDuration` in vercel.json (120s) and by five rounds.
+- **No hosted web search.** Anthropic's `web_search` is theirs. On Gemini, search
+  arrives only if you connect a server that offers it.
+- **The quota is real.** 10–15 requests a minute is comfortable for a
+  conversation and thin for a demo with an audience. Hitting it produces one
+  plain sentence rather than a stack trace.
+
+### What Gemini Nano cannot do
+
+Chrome ships Gemini Nano behind the Prompt API, and it is genuinely free and
+on-device — no key, no bill. It is also not a candidate for this app, and the
+reason is arithmetic rather than taste:
+
+- **Context.** Nano takes ~4K input / 1K output. JARVIS's system prompt alone is
+  250 words (~340 tokens); the last 16 turns of conversation run to 1,500–2,500;
+  and the tool schemas of eight MCP servers do not fit at all. It overflows
+  within a few turns.
+- **Tool calling.** Not on the stable channel: it needs
+  `chrome://flags/#prompt-api-tool-use`, desktop only. Without it JARVIS is a
+  chatbot — no search, no phone, no `ui_*` commands.
+- **Coverage.** Chrome only, capable hardware only, English only, ~2–4 GB
+  download on first use.
+
+Nano is a fine engine for summarising a page. It is not an agent, and JARVIS is
+an agent.
+
+---
+
 ## Deploying to Vercel
 
 Vercel is the deploy that can answer, because it can hold a secret. GitHub Pages
@@ -455,6 +513,8 @@ deploys this without reading the code first.
    |---|---|---|
    | `ANTHROPIC_API_KEY` | `sk-ant-…` | The only required one. Server-side only. |
    | `VITE_API_ROUTE` | `proxy` | Set for clarity; it is the default. |
+   | `GEMINI_API_KEY` | `…` | Only for `VITE_PROVIDER=gemini`. Free, no card. |
+   | `VITE_PROVIDER` | `anthropic` | Or `gemini`, for the free tier. |
    | `VITE_TTS_ENGINE` | `system` | Or `kokoro` for the neural voice. |
    | `VITE_ELEVENLABS_API_KEY` | `…` | Optional, better voice. |
    | `VITE_PICOVOICE_ACCESS_KEY` | `…` | Optional, offline wake word. |
