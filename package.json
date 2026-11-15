@@ -14,7 +14,7 @@
     "prebuild": "node scripts/vendor-wasm.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --test",
+    "test": "node --test --import tsx",
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",
     "bridge:writes": "node bridge/server.mjs --writes",

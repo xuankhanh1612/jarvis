@@ -128,6 +128,61 @@ export const KOKORO_VOICE = choice(
   'bm_george',
 )
 
+export type ApiRoute = 'proxy' | 'direct'
+
+/**
+ * How the browser reaches the Claude API.
+ *
+ *   'proxy'  — same-origin `POST /api/anthropic/v1/messages`, answered by
+ *              api/anthropic/[...path].ts on the host. The key lives in that
+ *              server's environment and never enters the bundle. This is the
+ *              only shape that is safe on a public URL, and it is what the
+ *              Vercel deploy uses.
+ *
+ *   'direct' — the browser talks to api.anthropic.com itself, with the key
+ *              compiled in. Nothing to run and it works from file:// or any
+ *              static host, but anyone who opens devtools can read and spend
+ *              the key. Fine on your own machine; not fine deployed.
+ *
+ * The defaults are chosen so the fallback is still honest: an explicit
+ * `VITE_API_ROUTE` wins, otherwise the key's presence selects direct, and with
+ * neither the proxy is assumed — because that is the mode that works when
+ * someone deploys this without reading the code first.
+ */
+export const API_ROUTE: ApiRoute = (() => {
+  const explicit = str(import.meta.env.VITE_API_ROUTE)
+  if (explicit === 'proxy' || explicit === 'direct') return explicit
+  if (explicit !== undefined) {
+    console.warn(
+      `[jarvis] VITE_API_ROUTE="${explicit}" is not one of proxy | direct — ignoring it.`,
+    )
+  }
+  return str(import.meta.env.VITE_ANTHROPIC_API_KEY) ? 'direct' : 'proxy'
+})()
+
+/**
+ * What the SDK is pointed at.
+ *
+ * The origin has to be baked in, not left relative, and this is not a detail
+ * anyone should "simplify" later. The SDK resolves its paths with
+ * `new URL(baseURL + path)`, and `new URL('/api/anthropic/v1/messages')` throws
+ * `ERR_INVALID_URL` — a relative base fails at the first request, not at
+ * construction, so it looks like a network error rather than a configuration
+ * one. Since the page and the function are on the same host, taking the origin
+ * from `window.location` resolves correctly on a preview domain, a production
+ * domain and a custom one alike, with no host to configure and no CORS to
+ * negotiate.
+ *
+ * `BASE_URL` is still prefixed because the two deploys differ: GitHub Pages
+ * serves the app from `/jarvis/`, Vercel from `/`. In `direct` mode the SDK's
+ * own default is correct, so the base URL stays undefined and nothing here is
+ * used.
+ */
+export const API_BASE_URL =
+  API_ROUTE === 'proxy'
+    ? new URL(`${import.meta.env.BASE_URL}api/anthropic`, window.location.origin).href
+    : undefined
+
 export const env = {
   anthropicKey: str(import.meta.env.VITE_ANTHROPIC_API_KEY) ?? '',
   elevenKey: str(import.meta.env.VITE_ELEVENLABS_API_KEY) ?? '',
